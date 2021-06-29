@@ -1,6 +1,8 @@
 /*
 京享值PK
-
+[task_local]
+#京享值PK
+15 3,6,13,19,21 * * * https://raw.githubusercontent.com/huhansez/jd_scripts/edit/main/jd_zoopk.js, tag=京享值PK
 需手动开宝箱
 能用且用
  */
