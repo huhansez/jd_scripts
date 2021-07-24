@@ -20,7 +20,7 @@ const CryptoJS = require('crypto-js')
 const notify = require('./sendNotify')
 dotenv.config()
 let appId: number = 10028, fingerprint: string | number, token: string = '', enCryptMethodJD: any;
-let cookie: string = '', cookiesArr: string[] = [], res: any = '', shareCodes: string[] = [];
+let cookie: string = '', res: any = '', shareCodes: string[] = [], isCollector: Boolean = false;
 
 let HELP_HW: string = process.env.HELP_HW ? process.env.HELP_HW : "true";
 console.log('帮助HelloWorld:', HELP_HW)
@@ -56,7 +56,12 @@ interface Params {
   ddwCount?: number,
   __t?: number,
   strBT?: string,
-  dwCurStageEndCnt?: number
+  dwCurStageEndCnt?: number,
+  dwRewardType?: number,
+  dwRubbishId?: number,
+  strPgtimestamp?: number,
+  strPhoneID?: string,
+  strPgUUNum?: string
 }
 
 let UserName: string, index: number;
@@ -79,6 +84,21 @@ let UserName: string, index: number;
     } catch (e) {
       console.log(e)
     }
+    let token: any = getJxToken(cookie)
+
+    // 离线
+    res = await api('user/QueryUserInfo',
+      '_cfd_t,bizCode,ddwTaskId,dwEnv,ptag,source,strMarkList,strPgUUNum,strPgtimestamp,strPhoneID,strShareId,strZone',
+      {
+        ddwTaskId: '',
+        strShareId: '',
+        strMarkList: 'guider_step,collect_coin_auth,guider_medal,guider_over_flag,build_food_full,build_sea_full,build_shop_full,build_fun_full,medal_guider_show,guide_guider_show,guide_receive_vistor,daily_task,guider_daily_task',
+        strPgtimestamp: token.strPgtimestamp,
+        strPhoneID: token.strPhoneID,
+        strPgUUNum: token.strPgUUNum
+      })
+    console.log('离线收益：', res.Business.ddwCoin)
+    await wait(2000)
 
     // 珍珠
     res = await api('user/ComposeGameState', '', {dwFirst: 1})
@@ -100,16 +120,21 @@ let UserName: string, index: number;
       console.log('游戏完成，等待3s')
       await wait(3000)
     }
+    await wait(2000)
+
     // 珍珠领奖
     res = await api('user/ComposeGameState', '', {dwFirst: 1})
     for (let stage of res.stagelist) {
       if (res.dwCurProgress >= stage.dwCurStageEndCnt && stage.dwIsAward === 0) {
-        let awardRes: any = await api('user/ComposeGameAward', '__t,dwCurStageEndCnt,strZone', {__t: Date.now(), dwCurStageEndCnt: stage.dwCurStageEndCnt})
-        console.log(awardRes)
+        let awardRes: any = await api('user/ComposeGameAward', '__t,dwCurStageEndCnt,strZone', {
+          __t: Date.now(),
+          dwCurStageEndCnt: stage.dwCurStageEndCnt
+        })
         console.log('珍珠领奖：', awardRes.ddwCoin, awardRes.addMonety)
         await wait(3000)
       }
     }
+    await wait(2000)
 
     // 签到 助力奖励
     res = await api('story/GetTakeAggrPage', '_cfd_t,bizCode,dwEnv,ptag,source,strZone')
@@ -127,25 +152,44 @@ let UserName: string, index: number;
         if (sign.dwDayId === res.Data.Sign.dwTodayId) {
           res = await api('story/RewardSign',
             '_cfd_t,bizCode,ddwCoin,ddwMoney,dwEnv,dwPrizeLv,dwPrizeType,ptag,source,strPrizePool,strZone',
-            {ddwCoin: sign.ddwCoin, ddwMoney: sign.ddwMoney, dwPrizeLv: sign.dwBingoLevel, dwPrizeType: sign.dwPrizeType, strPrizePool: sign.strPrizePool})
+            {
+              ddwCoin: sign.ddwCoin,
+              ddwMoney: sign.ddwMoney,
+              dwPrizeLv: sign.dwBingoLevel,
+              dwPrizeType: sign.dwPrizeType,
+              strPrizePool: sign.strPrizePool
+            })
           if (res.iRet === 0)
             console.log('签到成功：', res.Data.ddwCoin, res.Data.ddwMoney, res.Data.strPrizePool)
           break
         }
       }
     }
+    await wait(2000)
 
     // 船来了
-    res = await api('user/QueryUserInfo', '_cfd_t,bizCode,ddwTaskId,dwEnv,ptag,source,strShareId,strZone', {ddwTaskId: '', strShareId: '', strMarkList: 'undefined'})
+    res = await api('user/QueryUserInfo', '_cfd_t,bizCode,ddwTaskId,dwEnv,ptag,source,strShareId,strZone', {
+      ddwTaskId: '',
+      strShareId: '',
+      strMarkList: 'undefined'
+    })
     if (res.StoryInfo.StoryList) {
-      console.log(JSON.stringify(res))
       if (res.StoryInfo.StoryList[0].Special) {
         console.log(`船来了，乘客是${res.StoryInfo.StoryList[0].Special.strName}`)
-        let shipRes: any = await api('story/SpecialUserOper', '_cfd_t,bizCode,ddwTriggerDay,dwEnv,dwType,ptag,source,strStoryId,strZone,triggerType', {strStoryId: res.StoryInfo.StoryList[0].strStoryId, dwType: '2', triggerType: 0, ddwTriggerDay: res.StoryInfo.StoryList[0].ddwTriggerDay})
-        console.log(shipRes)
+        let shipRes: any = await api('story/SpecialUserOper', '_cfd_t,bizCode,ddwTriggerDay,dwEnv,dwType,ptag,source,strStoryId,strZone,triggerType', {
+          strStoryId: res.StoryInfo.StoryList[0].strStoryId,
+          dwType: '2',
+          triggerType: 0,
+          ddwTriggerDay: res.StoryInfo.StoryList[0].ddwTriggerDay
+        })
         console.log('正在下船，等待30s')
         await wait(30000)
-        shipRes = await api('story/SpecialUserOper', '_cfd_t,bizCode,ddwTriggerDay,dwEnv,dwType,ptag,source,strStoryId,strZone,triggerType', {strStoryId: res.StoryInfo.StoryList[0].strStoryId, dwType: '3', triggerType: 0, ddwTriggerDay: res.StoryInfo.StoryList[0].ddwTriggerDay})
+        shipRes = await api('story/SpecialUserOper', '_cfd_t,bizCode,ddwTriggerDay,dwEnv,dwType,ptag,source,strStoryId,strZone,triggerType', {
+          strStoryId: res.StoryInfo.StoryList[0].strStoryId,
+          dwType: '3',
+          triggerType: 0,
+          ddwTriggerDay: res.StoryInfo.StoryList[0].ddwTriggerDay
+        })
         if (shipRes.iRet === 0)
           console.log('船客接待成功')
         else
@@ -154,14 +198,20 @@ let UserName: string, index: number;
 
       if (res.StoryInfo.StoryList[0].Collector) {
         console.log('收藏家出现')
+        // TODO 背包满了再卖给收破烂的
+        // res = await api('story/CollectorOper', '_cfd_t,bizCode,dwEnv,ptag,source,strZone,strStoryId,dwType,ddwTriggerDay', {strStoryId: res.StoryInfo.StoryList[0].strStoryId, dwType: '2', ddwTriggerDay: res.StoryInfo.StoryList[0].ddwTriggerDay})
+        // console.log(res)
+        // await wait(1000)
+        // isCollector = true
       }
     }
+    await wait(2000)
 
+    /*
     // 清空背包
     res = await api('story/querystorageroom', '_cfd_t,bizCode,dwEnv,ptag,source,strZone')
     let bags: number[] = []
     for (let s of res.Data.Office) {
-      console.log(s.dwCount, s.dwType)
       bags.push(s.dwType)
       bags.push(s.dwCount)
     }
@@ -175,15 +225,33 @@ let UserName: string, index: number;
     }
     if (bags.length !== 0) {
       res = await api('story/sellgoods', '_cfd_t,bizCode,dwEnv,dwSceneId,ptag,source,strTypeCnt,strZone',
-        {dwSceneId: '1', strTypeCnt: strTypeCnt})
+        {dwSceneId: isCollector ? '2' : '1', strTypeCnt: strTypeCnt})
       console.log('卖贝壳收入:', res.Data.ddwCoin, res.Data.ddwMoney)
     }
+     */
+    await wait(2000)
 
     // 垃圾🚮
     res = await api('story/QueryRubbishInfo', '_cfd_t,bizCode,dwEnv,ptag,source,strZone')
     if (res.Data.StoryInfo.StoryList.length !== 0) {
-      await api('story/RubbishOper', '')
+      console.log('有垃圾')
+      await api('story/RubbishOper', '_cfd_t,bizCode,dwEnv,dwRewardType,dwType,ptag,source,strZone', {
+        dwType: '1',
+        dwRewardType: 0
+      })
+      await wait(1000)
+      for (let j = 1; j < 9; j++) {
+        res = await api('story/RubbishOper', '_cfd_t,bizCode,dwEnv,dwRewardType,dwRubbishId,dwType,ptag,source,strZone', {
+          dwType: '2',
+          dwRewardType: 0,
+          dwRubbishId: j
+        })
+        console.log(res.Data)
+        // console.log('垃圾分类：', res.Data.RubbishGame.AllRubbish.ddwCoin)
+        await wait(1500)
+      }
     }
+    await wait(2000)
 
     // 任务➡️
     let tasks: any
@@ -197,6 +265,7 @@ let UserName: string, index: number;
         await wait(1000)
       }
     }
+    await wait(2000)
 
     // 导游
     res = await api('user/EmployTourGuideInfo', '_cfd_t,bizCode,dwEnv,ptag,source,strZone')
@@ -215,6 +284,7 @@ let UserName: string, index: number;
         }
       }
     }
+    await wait(2000)
 
     // 任务⬇️
     tasks = await mainTask('GetUserTaskStatusList', '_cfd_t,bizCode,dwEnv,ptag,source,strZone,taskId', {taskId: 0});
@@ -231,17 +301,23 @@ let UserName: string, index: number;
           await wait(2000)
         } else if (t.awardStatus === 2 && t.completedTimes < t.targetTimes && ([1, 2, 3, 4].includes(t.orderId))) {
           console.log('做任务:', t.taskId, t.taskName, t.completedTimes, t.targetTimes)
-          res = await mainTask('DoTask', '_cfd_t,bizCode,configExtra,dwEnv,ptag,source,strZone,taskId', {taskId: t.taskId, configExtra: ''})
+          res = await mainTask('DoTask', '_cfd_t,bizCode,configExtra,dwEnv,ptag,source,strZone,taskId', {
+            taskId: t.taskId,
+            configExtra: ''
+          })
           console.log('做任务:', res)
           await wait(5000)
         }
       }
     }
+    await wait(2000)
 
     for (let b of ['food', 'fun', 'shop', 'sea']) {
       res = await api('user/GetBuildInfo', '_cfd_t,bizCode,dwEnv,dwType,ptag,source,strBuildIndex,strZone', {strBuildIndex: b})
       console.log(`${b}升级需要:`, res.ddwNextLvlCostCoin)
+      /*
       await wait(1000)
+      // 在提现时升级
       if (res.dwCanLvlUp === 1) {
         res = await api('user/BuildLvlUp', '_cfd_t,bizCode,ddwCostCoin,dwEnv,ptag,source,strBuildIndex,strZone', {ddwCostCoin: res.ddwNextLvlCostCoin, strBuildIndex: b})
         if (res.iRet === 0) {
@@ -249,7 +325,11 @@ let UserName: string, index: number;
           await wait(2000)
         }
       }
-      res = await api('user/CollectCoin', '_cfd_t,bizCode,dwEnv,dwType,ptag,source,strBuildIndex,strZone', {strBuildIndex: b, dwType: '1'})
+      */
+      res = await api('user/CollectCoin', '_cfd_t,bizCode,dwEnv,dwType,ptag,source,strBuildIndex,strZone', {
+        strBuildIndex: b,
+        dwType: '1'
+      })
       console.log(`${b}收金币:`, res.ddwCoin)
       await wait(1000)
     }
@@ -258,7 +338,7 @@ let UserName: string, index: number;
   // 获取随机助力码
   if (HELP_HW === 'true') {
     try {
-      let {data} = await axios.get("https://api.sharecode.ga/api/HW_CODES")
+      let {data} = await axios.get("https://api.sharecode.ga/api/HW_CODES", {timeout: 10000})
       shareCodes = [
         ...shareCodes,
         ...data.jxcfd
@@ -270,7 +350,7 @@ let UserName: string, index: number;
   }
   if (HELP_POOL === 'true') {
     try {
-      let {data} = await axios.get('https://api.sharecode.ga/api/jxcfd/20')
+      let {data} = await axios.get('https://api.sharecode.ga/api/jxcfd/20', {timeout: 10000})
       console.log('获取到20个随机助力码:', data.data)
       shareCodes = [...shareCodes, ...data.data]
     } catch (e) {
@@ -348,12 +428,16 @@ function makeShareCodes() {
   return new Promise<void>(async (resolve, reject) => {
     let bean: string = await getBeanShareCode(cookie)
     let farm: string = await getFarmShareCode(cookie)
-    res = await api('user/QueryUserInfo', '_cfd_t,bizCode,ddwTaskId,dwEnv,ptag,source,strShareId,strZone', {ddwTaskId: '', strShareId: '', strMarkList: 'undefined'})
+    res = await api('user/QueryUserInfo', '_cfd_t,bizCode,ddwTaskId,dwEnv,ptag,source,strShareId,strZone', {
+      ddwTaskId: '',
+      strShareId: '',
+      strMarkList: 'undefined'
+    })
     console.log('助力码:', res.strMyShareId)
     shareCodes.push(res.strMyShareId)
     let pin: string = cookie.match(/pt_pin=([^;]*)/)![1]
     pin = Md5.hashStr(pin)
-    axios.get(`https://api.sharecode.ga/api/autoInsert?db=jxcfd&code=${res.strMyShareId}&bean=${bean}&farm=${farm}&pin=${pin}`)
+    axios.get(`https://api.sharecode.ga/api/autoInsert?db=jxcfd&code=${res.strMyShareId}&bean=${bean}&farm=${farm}&pin=${pin}`, {timeout: 10000})
       .then(res => {
         if (res.data.code === 200)
           console.log('已自动提交助力码')
@@ -441,4 +525,31 @@ function getQueryString(url: string, name: string) {
   let r = url.split('?')[1].match(reg);
   if (r != null) return unescape(r[2]);
   return '';
+}
+
+function getJxToken(cookie: string) {
+  function generateStr(input: number) {
+    let src = 'abcdefghijklmnopqrstuvwxyz1234567890';
+    let res = '';
+    for (let i = 0; i < input; i++) {
+      res += src[Math.floor(src.length * Math.random())];
+    }
+    return res;
+  }
+
+  return new Promise(resolve => {
+    let phoneId = generateStr(40);
+    let timestamp = Date.now().toString();
+    if (!cookie['match'](/pt_pin=([^; ]+)(?=;?)/)) {
+      console.log('此账号cookie填写不规范,你的pt_pin=xxx后面没分号(;)\n');
+      resolve({});
+    }
+    let nickname = cookie.match(/pt_pin=([^;]*)/)![1];
+    let jstoken = Md5.hashStr('' + decodeURIComponent(nickname) + timestamp + phoneId + 'tPOamqCuk9NLgVPAljUyIHcPRmKlVxDy');
+    resolve({
+      'strPgtimestamp': timestamp,
+      'strPhoneID': phoneId,
+      'strPgUUNum': jstoken
+    })
+  });
 }
